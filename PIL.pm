@@ -4,35 +4,11 @@ require Exporter;
 
 =head1 NAME
 
-Weather::PIL - routines for parsing WMO header
+Weather::PIL - 
 
 =head1 DESCRIPTION
 
-Weather::PIL is an object for parsing product identifier lines (headers)
-in WMO weather products.
-
 =head1 EXAMPLE
-
-    require Weather::PIL;
-
-    $line = "FPUS61 KOKX 171530";
-
-    unless (Weather::PIL::valid($line)) {
-        die "\'$line\' is not a valid header.\n";
-    }
-
-    $pil = new Weather::PIL($line);
-
-    print "PIL\t", $pil->PIL, "\n";
-    print "code\t", $pil->code, "\n";		# FPUS61
-    print "station\t", $pil->station, "\n";	# KOKX
-    print "time\t", $pil->time, "\n";		# "171530"
-
-    # other constructors
-    $pil = new Weather::PIL qw(FPUS51 KNYC 041200 PAA);
-
-    $pil = new Weather::PIL;
-    $pil->PIL="FPUS51 KNYC 041200 (PAA)";
 
 =head1 AUTHOR
 
@@ -44,7 +20,7 @@ Robert Rothenberg <wlkngowl@unix.asb.com>
 @EXPORT = qw();
 
 use vars qw($VERSION $AUTOLOAD);
-$VERSION = "1.0.5";
+$VERSION = "1.1.0";
 
 use Carp;
 
@@ -67,7 +43,7 @@ sub import {
     my $self = shift;
     export $self;
 
-    my $pil, $code, $station, $time, $addendum;
+    my $PIL;
 
     if (defined($self{PIL})) {
         croak "PIL already created";
@@ -75,40 +51,38 @@ sub import {
 
     if (@_) {
         if (@_==1) {
-            $pil = shift;
-            ($code, $station, $time, $addendum) = split(/ /, $pil);
-            $addendum =~ s/\(((AA|CC|RR|P[A-X])[A-X])\)/$1/;
+            $PIL = shift;
         } else {
-            ($code, $station, $time, $addendum)=@_;
-            $pil = "$code $station $time";
-            if (defined($addendum)) {
-                $pil .= " ($addendum)";
-            }
         }
     }    
 
-    if (defined($pil)) {
-        $self->{PIL} = $pil;
-        unless (valid($pil)) {
-            croak "Invalid PIL: $pil";
+    if (defined($PIL)) {
+        unless (valid($PIL)) {
+            croak "Invalid PIL: $PIL";
         }
+        $self->{PIL} = $PIL;
     }
 
-    $self->{code} = $code;
-    $self->{station} = $station;
-    $self->{time} = $time;
-    $self->{addendum} = $addendum;
+    $self->{NNN} = substr($PIL, 0, 3);
+    $self->{ccc} = substr($PIL, 4);
 }
 
 sub valid {
     my $arg = shift;
-    if ($arg =~ m/^[A-Z]{4}\d{2} [A-Z]{3,4} \d{4,6}( \((AA|CC|RR|P[A-X])[A-X]\))?$/) {
+    if ($arg =~ m/^[A-Z0-9]{4,6}$/) {
         return 1;
     } else {
         return 0;
     }
 }
 
+sub cmp {
+    my $self = shift;
+    my $another = shift;
+
+    my $type = ref($another) or croak "$another is not an object";
+    return ($self->NNN eq $another->NNN);
+}
 
 sub AUTOLOAD {
     my $self = shift;
@@ -118,7 +92,9 @@ sub AUTOLOAD {
     my $name = $AUTOLOAD;
     $name =~ s/.*://;   # strip fully-qualified portion
 
-    if (grep(/^$name$/, qw(PIL code station time addendum))) {
+    if (grep(/^$name$/,
+        qw(PIL NNN ccc)
+    )) {
         if (@_) {
             if ($name eq "PIL") {
                 $self->import(@_);
